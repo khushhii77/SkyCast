@@ -3,7 +3,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { WeatherData } from "../types";
 
 export const fetchWeatherByCity = async (city: string): Promise<WeatherData> => {
-  const ai = new GoogleGenAI({ apiKey: 'AIzaSyBbj5TWUl-z6tRBLN3TMNhKbw7Zbd5gtFs' });
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const model = "gemini-3-flash-preview";
   
   const prompt = `
