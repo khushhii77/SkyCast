@@ -1,127 +1,67 @@
+import { WeatherData } from '../types';
 
-import { GoogleGenAI, Type } from "@google/genai";
-import { WeatherData } from "../types";
+// Helper to map Open-Meteo WMO Codes to human-readable strings
+const getConditionFromCode = (code: number): string => {
+  if (code === 0) return "Clear sky";
+  if (code <= 3) return "Mainly clear / Partly cloudy";
+  if (code <= 48) return "Foggy";
+  if (code <= 67) return "Rainy";
+  if (code <= 77) return "Snowy";
+  if (code <= 99) return "Thunderstorm";
+  return "Variable";
+};
 
+/**
+ * Fetches coordinates for a city name, then fetches weather.
+ */
 export const fetchWeatherByCity = async (city: string): Promise<WeatherData> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const model = "gemini-3-flash-preview";
+  // Use const to define the variable properly
+  const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=en&format=json`;
   
-  const prompt = `
-    Provide the current weather for ${city}. 
-    I need: 
-    1. Temperature in Celsius (number only).
-    2. Humidity percentage (number only).
-    3. General weather condition (e.g., "Clear", "Cloudy", "Rain", "Snow", "Storm").
-    4. A short description of the weather.
-    5. Wind speed with units.
-    6. Today's high and low temperatures in Celsius.
-    
-    Return the data strictly in JSON format.
-  `;
-
   try {
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: prompt,
-      config: {
-        tools: [{ googleSearch: {} }],
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            city: { type: Type.STRING },
-            temperature: { type: Type.NUMBER },
-            humidity: { type: Type.NUMBER },
-            condition: { type: Type.STRING },
-            description: { type: Type.STRING },
-            windSpeed: { type: Type.STRING },
-            high: { type: Type.NUMBER },
-            low: { type: Type.NUMBER },
-          },
-          required: ["city", "temperature", "humidity", "condition", "description", "windSpeed", "high", "low"]
-        }
-      },
-    });
-
-    const result = JSON.parse(response.text || "{}");
+    const geoResponse = await fetch(geoUrl);
+    if (!geoResponse.ok) throw new Error("Geocoding service unavailable");
     
-    // Extract sources from grounding metadata if available
-    const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-    const sources = groundingChunks
-      .filter((chunk: any) => chunk.web)
-      .map((chunk: any) => ({
-        title: chunk.web.title,
-        uri: chunk.web.uri
-      }));
+    const geoData = await geoResponse.json();
 
-    return {
-      ...result,
-      sources
-    };
-  } catch (error) {
-    console.error("Error fetching weather:", error);
-    throw new Error("Failed to fetch weather data. Please try again.");
+    if (!geoData.results || geoData.results.length === 0) {
+      throw new Error("City not found. Please check the spelling.");
+    }
+
+    const { latitude, longitude, name } = geoData.results[0];
+    
+    // Pass the found coordinates to the next function
+    return await fetchWeatherByCoords(latitude, longitude, name);
+  } catch (error: any) {
+    throw new Error(error.message || "An error occurred while searching for the city.");
   }
 };
 
-export const fetchWeatherByCoords = async (lat: number, lon: number): Promise<WeatherData> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const model = "gemini-3-flash-preview";
+/**
+ * Fetches high-resolution weather data using latitude and longitude.
+ */
+export const fetchWeatherByCoords = async (lat: number, lon: number, cityName?: string): Promise<WeatherData> => {
+  const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min&timezone=auto`;
   
-  const prompt = `
-    Provide the current weather for the location at coordinates: Latitude ${lat}, Longitude ${lon}.
-    Identify the city or nearest location name.
-    I need: 
-    1. City name.
-    2. Temperature in Celsius (number only).
-    3. Humidity percentage (number only).
-    4. General weather condition (e.g., "Clear", "Cloudy", "Rain", "Snow", "Storm").
-    5. A short description of the weather.
-    6. Wind speed with units.
-    7. Today's high and low temperatures in Celsius.
-    
-    Return the data strictly in JSON format.
-  `;
-
   try {
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: prompt,
-      config: {
-        tools: [{ googleSearch: {} }],
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            city: { type: Type.STRING },
-            temperature: { type: Type.NUMBER },
-            humidity: { type: Type.NUMBER },
-            condition: { type: Type.STRING },
-            description: { type: Type.STRING },
-            windSpeed: { type: Type.STRING },
-            high: { type: Type.NUMBER },
-            low: { type: Type.NUMBER },
-          },
-          required: ["city", "temperature", "humidity", "condition", "description", "windSpeed", "high", "low"]
-        }
-      },
-    });
+    const response = await fetch(weatherUrl);
+    if (!response.ok) throw new Error("Weather service unavailable");
+    
+    const data = await response.json();
 
-    const result = JSON.parse(response.text || "{}");
-    const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-    const sources = groundingChunks
-      .filter((chunk: any) => chunk.web)
-      .map((chunk: any) => ({
-        title: chunk.web.title,
-        uri: chunk.web.uri
-      }));
-
+    // Mapping to your existing WeatherData interface
     return {
-      ...result,
-      sources
+      city: cityName || "Current Location",
+      temperature: Math.round(data.current.temperature_2m),
+      humidity: data.current.relative_humidity_2m,
+      condition: getConditionFromCode(data.current.weather_code),
+      description: "Atmospheric data grounded by local meteorological models.",
+      windSpeed: `${data.current.wind_speed_10m} km/h`,
+      high: Math.round(data.daily.temperature_2m_max[0]),
+      low: Math.round(data.daily.temperature_2m_min[0]),
+      sources: [{ title: "Open-Meteo", uri: "https://open-meteo.com/" }]
     };
-  } catch (error) {
-    console.error("Error fetching weather by coords:", error);
-    throw new Error("Failed to fetch location weather.");
+  } catch (error: any) {
+    throw new Error(error.message || "Failed to fetch data for these coordinates.");
   }
 };

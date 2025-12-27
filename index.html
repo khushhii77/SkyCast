@@ -1,86 +1,125 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Simple Weather App</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SkyCast | Modern Weather Insights</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
-        /* CSS: This makes the app look good */
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Poppins', sans-serif; }
+
         body {
-            font-family: Arial, sans-serif;
+            height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
-            background-color: #f0f2f5;
-            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
         }
 
         .weather-card {
-            background: white;
-            padding: 2rem;
-            border-radius: 15px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            padding: 2.5rem;
+            border-radius: 24px;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
             text-align: center;
-            width: 300px;
+            width: 380px;
+            transition: transform 0.3s ease;
         }
+
+        h2 { font-weight: 600; margin-bottom: 1.5rem; letter-spacing: 1px; }
+
+        .search-box { display: flex; gap: 10px; margin-bottom: 20px; }
 
         input {
-            padding: 10px;
-            width: 70%;
-            border: 1px solid #ccc;
-            border-radius: 5px;
+            flex: 1;
+            padding: 12px 15px;
+            border: none;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            outline: none;
         }
+
+        input::placeholder { color: rgba(255, 255, 255, 0.7); }
 
         button {
-            padding: 10px;
-            background-color: #007bff;
-            color: white;
+            padding: 12px 20px;
+            background: #fff;
+            color: #764ba2;
             border: none;
-            border-radius: 5px;
+            border-radius: 12px;
+            font-weight: 600;
             cursor: pointer;
+            transition: 0.3s;
         }
 
-        button:hover {
-            background-color: #0056b3;
+        button:hover { transform: scale(1.05); background: #f0f0f0; }
+
+        .weather-info { 
+            display: none; 
+            animation: fadeIn 0.8s ease forwards;
         }
 
-        .weather-info {
-            margin-top: 20px;
-            display: none; /* Hidden until we search */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        #cityName { font-size: 1.8rem; margin: 10px 0; }
+        #weatherIcon { width: 100px; filter: drop-shadow(2px 4px 6px rgba(0,0,0,0.2)); }
+        #temperature { font-size: 2.5rem; font-weight: 600; margin: 5px 0; }
+        
+        .details-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin: 20px 0;
+            font-size: 0.9rem;
         }
 
         .forecast-box {
-            margin-top: 15px;
-            padding-top: 15px;
-            border-top: 1px solid #eee;
-            font-size: 0.9em;
-            color: #555;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 15px;
+            font-size: 0.85rem;
+            margin-top: 10px;
         }
     </style>
 </head>
 <body>
 
     <div class="weather-card">
-        <h2>Weather Pulse</h2>
-        <input type="text" id="cityInput" placeholder="Enter city name">
-        <button onclick="getWeather()">Search</button>
+        <h2>SkyCast</h2>
+        <div class="search-box">
+            <input type="text" id="cityInput" placeholder="Search City...">
+            <button onclick="getWeather()">Go</button>
+        </div>
 
         <div class="weather-info" id="weatherInfo">
-            <h3 id="cityName">City Name</h3>
-            <img id="weatherIcon" src="" alt="Weather Icon">
-            <p id="temperature">Temp: --</p>
-            <p id="humidity">Humidity: --</p>
-            <p id="condition">Condition: --</p>
+            <h3 id="cityName">---</h3>
+            <img id="weatherIcon" src="" alt="">
+            <p id="temperature">--°C</p>
+            <p id="condition" style="text-transform: capitalize; margin-bottom: 10px;">--</p>
             
+            <div class="details-grid">
+                <div><strong>Humidity</strong><br><span id="humidity">--</span></div>
+                <div><strong>Feels Like</strong><br><span id="feelsLike">--</span></div>
+            </div>
+
             <div class="forecast-box">
-                <strong>Forecast (Next Day):</strong>
-                <p id="forecast">Loading...</p>
+                <strong>Tomorrow's Outlook</strong>
+                <p id="forecast" style="margin-top: 5px;">Search to load forecast...</p>
             </div>
         </div>
     </div>
-<script src="config.js"></script>   
+
     <script>
-        // Use the same API Key you used in your Android app
-        const apiKey = CONFIG.API_KEY; 
+        // Directly using the key you provided in the request
+        const apiKey = "c3c2e35459514612a8b164547252712"; 
 
         async function getWeather() {
             const city = document.getElementById('cityInput').value;
@@ -91,34 +130,26 @@
                 return;
             }
 
-            // Note: We use 'forecast.json' to get both current weather AND forecast
-            // days=2 means today + tomorrow
-            const url = `https://api.weatherapi.com/v1/forecast.json?key=${apiKey}&q=${city}&days=2&aqi=no`;
+             const url = `https://api.weatherapi.com/v1/forecast.json?key=c3c2e35459514612a8b164547252712&q=${city}&days=2&aqi=no`;
+
 
             try {
-                // 'fetch' is the web version of 'Volley' or 'Retrofit'
                 const response = await fetch(url);
-                
-                if (!response.ok) {
-                    throw new Error("City not found");
-                }
-
+                if (!response.ok) throw new Error("City not found");
                 const data = await response.json();
 
-                // 1. Update Current Weather (Similar to your Android logic)
+                // Updating UI
                 document.getElementById('cityName').innerText = data.location.name;
-                document.getElementById('temperature').innerText = `Temp: ${data.current.temp_c}°C / ${data.current.temp_f}°F`;
-                document.getElementById('humidity').innerText = `Humidity: ${data.current.humidity}%`;
+                document.getElementById('temperature').innerText = `${Math.round(data.current.temp_c)}°C`;
+                document.getElementById('humidity').innerText = `${data.current.humidity}%`;
+                document.getElementById('feelsLike').innerText = `${data.current.feelslike_c}°C`;
                 document.getElementById('condition').innerText = data.current.condition.text;
                 document.getElementById('weatherIcon').src = "https:" + data.current.condition.icon;
 
-                // 2. Update Forecast (Next Day)
-                // data.forecast.forecastday[1] gets the NEXT day (index 0 is today)
                 const tomorrow = data.forecast.forecastday[1];
                 document.getElementById('forecast').innerText = 
-                    `${tomorrow.date}: Max ${tomorrow.day.maxtemp_c}°C / Min ${tomorrow.day.mintemp_c}°C - ${tomorrow.day.condition.text}`;
+                    `${tomorrow.day.condition.text} | High: ${Math.round(tomorrow.day.maxtemp_c)}°C`;
 
-                // Show the result box
                 display.style.display = "block";
 
             } catch (error) {
@@ -126,6 +157,5 @@
             }
         }
     </script>
-
 </body>
 </html>
